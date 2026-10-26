@@ -40,7 +40,7 @@ input:focus,select:focus{outline:2px solid var(--acc);border-color:transparent}
 <select id="cur"></select>
 <div class="rate" id="rateinfo">Loading live rates…</div>
 
-<label>Phone value</label>
+<label>Phone value — use Customs' reference price for your model, not your receipt</label>
 <input id="phone" type="number" inputmode="decimal" value="1000" min="0">
 
 <div class="row">
@@ -53,6 +53,9 @@ input:focus,select:focus{outline:2px solid var(--acc);border-color:transparent}
   <div><label>IDR per 1 USD (live, editable)</label><input id="fx" type="number" inputmode="decimal" value="" min="1"></div>
 </div>
 
+<label>Customs may value it differently by up to</label>
+<select id="unc"><option value="0">±0%</option><option value="10">±10%</option><option value="15" selected>±15%</option><option value="25">±25%</option></select>
+
 <div class="res">
   <div class="line"><span>Taxable basket</span><span id="cv"></span></div>
   <div class="line"><span>Allowance</span><span id="al"></span></div>
@@ -62,9 +65,10 @@ input:focus,select:focus{outline:2px solid var(--acc);border-color:transparent}
   <div class="line"><span>Income tax (PPh)</span><span>exempt</span></div>
   <div class="total"><span>Estimated fee</span><b id="tot"></b></div>
   <div class="usd" id="usd"></div>
+  <div class="usd" id="rng"></div>
 </div>
 
-<p class="note">Estimate only. Customs uses its own reference price database for your phone model and the weekly Ministry of Finance (KMK) exchange rate. The live market rate here will differ slightly from the KMK rate, so edit the IDR field if you know it. The USD 500 allowance is shared across <i>all</i> personal goods in that arrival, not per phone. Declare the phone via All Indonesia / e-CD before leaving the arrival area. Registration within 60 days of arrival is possible only at a customs office, with no allowance.</p>
+<p class="note">Estimate only. <b>Customs (Bea Cukai) values phones from its own reference price database by model, so what you paid does not matter.</b> If its system values the device under USD 500 you pay nothing; above that, or if the model is not in the database, they review it (invoice may be asked). NPWP does not change the fee: since PMK 34/2025 passenger goods are exempt from income tax (PPh) either way. Customs uses its own reference price database for your phone model and the weekly Ministry of Finance (KMK) exchange rate. The live market rate here will differ slightly from the KMK rate, so edit the IDR field if you know it. The USD 500 allowance is shared across <i>all</i> personal goods in that arrival, not per phone. Declare the phone via All Indonesia / e-CD before leaving the arrival area. Registration within 60 days of arrival is possible only at a customs office, with no allowance.</p>
 </main>
 <script>
 let mode='airport', rates=null, stamp='';
@@ -99,25 +103,26 @@ function calc(){
   const perUSD=cur==='IDR'?fx:(rates[cur]||1);      // units of cur per 1 USD
   const toUSD=x=>x/perUSD;
   const fromUSD=x=>x*perUSD;
-  const phones=toUSD(v('phone')+v('more')), other=toUSD(v('other')), fi=toUSD(v('fi'));
+  const phones0=toUSD(v('phone')+v('more')), other=toUSD(v('other')), fi=toUSD(v('fi'));
   const allow=mode==='airport'?500:0;
-  const base=mode==='airport'?phones+other+fi:phones+fi;
-  const dv=Math.max(0,base-allow);
-  const bm=dv*0.10;
-  const ppn=(dv+bm)*0.12*11/12;
-  const tot=bm+ppn;
+  const feeFor=ph=>{const base=mode==='airport'?ph+other+fi:ph+fi;const dv=Math.max(0,base-allow);const bm=dv*0.10;const ppn=(dv+bm)*0.12*11/12;return {base,dv,bm,ppn,tot:bm+ppn};};
+  const r=feeFor(phones0), {base,dv,bm,ppn,tot}=r;
+  const u=parseFloat($('unc').value)/100;
+  const lo=feeFor(phones0*(1-u)).tot, hi=feeFor(phones0*(1+u)).tot;
   $('cv').textContent=money(fromUSD(base),cur)+(cur!=='USD'?' ('+money(base,'USD')+')':'');
   $('al').textContent=allow?'− USD 500 (≈ '+money(fromUSD(500),cur)+')':'none';
   $('dv').textContent=money(dv,'USD');
   $('bm').textContent=idr(bm*fx);
   $('ppn').textContent=idr(ppn*fx);
   $('tot').textContent=idr(tot*fx);
+  $('rng').textContent=u?('Range if value shifts ±'+Math.round(u*100)+'%: '+idr(lo*fx)+' – '+idr(hi*fx)):'';
   $('usd').textContent=(cur!=='USD'&&cur!=='IDR'?money(fromUSD(tot),cur)+' · ':'')+money(tot,'USD');
 }
 document.querySelectorAll('#mode button').forEach(b=>b.onclick=()=>{
   document.querySelectorAll('#mode button').forEach(x=>x.classList.remove('on'));
   b.classList.add('on');mode=b.dataset.m;calc();
 });
+$('unc').onchange=calc;
 $('cur').onchange=()=>{localStorage.setItem('imei_cur',$('cur').value);calc();};
 document.querySelectorAll('input').forEach(i=>i.oninput=calc);
 loadRates();
